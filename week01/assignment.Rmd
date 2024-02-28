@@ -1,0 +1,21 @@
+---
+title: "assignment"
+author: "Gavin Graf"
+date: "2024-02-26"
+output: html_document
+---
+
+
+
+## Assignment 1
+
+# Epiwraps
+```{r epiwraps}
+library(epiwraps)
+```
+# Session Information
+```{r sessionInfo}
+sessionInfo()
+```
+
+
