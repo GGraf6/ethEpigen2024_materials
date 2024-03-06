@@ -1,0 +1,70 @@
+---
+title: "assignment"
+author: "Gavin Graf"
+date: "2024-03-01"
+output: html_document
+---
+
+```{r packages}
+suppressPackageStartupMessages({
+  library(AnnotationHub) # to fetch genomes, annotations, etc.
+  library(ensembldb)     # to manipulate ensembl gene annotations
+  library(GenomicRanges) # data structure for genomic ranges 
+  library(epiwraps)      # visualization
+  library(ggplot2)
+})
+```
+
+```{r Annotation Hub}
+ah <- AnnotationHub()
+```
+#Mus Musculus EnsDb
+```{r Mus Musculus}
+q <- query(ah, c(species = "Mus Musculus",dataprovider = "Ensembl", rdataclass = "EnsDb", genome = "GRCm38"))
+q
+mus <- ah[["AH89211"]]
+
+```
+#Mus Musculus 2bit
+```{r Mus Musculus 2bit}
+q <- query(ah, c(species = "Mus Musculus" ,dataprovider = "Ensembl", rdataclass = "TwoBitFile", genome = "GRCm38"))
+q
+mus2 <- ah[["AH88477"]]
+
+```
+#Drosophila Melanogaster 2bit
+```{r Drosophila Melanogaster}
+q <- query(ah, c(species = "Drosophila Melanogaster",dataprovider = "Ensembl", rdataclass = "TwoBitFile", genome = "BDGP6"))
+q
+dros <- ah[["AH106160"]]
+```
+
+#Number of different Gene IDs and Gene Symbols for protein coding genes
+```{r mus EnsDb: # different gene IDs and gene Symbols}
+
+musgenes <- genes(mus)
+
+muspcg <- musgenes[musgenes$gene_biotype == "protein_coding"]
+
+length(unique(muspcg$gene_id))
+length(unique(muspcg$symbol))
+
+
+```
+#Spliced length frequency of protein coding transcripts
+```{r mus EnsDb: spliced length frequency of protein coding transcripts}
+
+muspcexons <- exonsBy(x = mus, by = "tx", filter=TxBiotypeFilter("protein_coding"))
+
+
+splicedlength <- numeric(0)
+for (i in 1:length(muspcexons)) {
+    splicedlength <- c(splicedlength, sum(width(ranges(muspcexons[i,]))))
+}
+
+
+df <- data.frame(splicedlength)
+ggplot(df, aes(x = splicedlength)) + geom_histogram(binwidth = 5, breaks = seq(0,18000, by = 100))
+```
+
+
