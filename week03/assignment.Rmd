@@ -1,0 +1,116 @@
+---
+title: "assignment"
+author: "Gavin Graf"
+date: "2024-03-08"
+output: html_document
+---
+
+```{r packages}
+
+suppressPackageStartupMessages({
+  library(AnnotationHub) 
+  library(Rsubread)
+  library(rtracklayer)
+  library(Biostrings)
+  library(Rfastp)
+  library(epiwraps)
+  library(ensembldb)
+  library(GenomicRanges)
+  library(ggplot2)
+})
+
+```
+
+```{r download Drosophila ChIP-seq from encode}
+options(timeout=3600)
+dir.create("raw") 
+download.file("https://www.encodeproject.org/files/ENCFF127RRR/@@download/ENCFF127RRR.fastq.gz", dest="raw/Dros.fastq.gz", mode = "wb")
+```
+```{r QC + trimming fastq}
+dir.create("trimmed")
+qc <- lapply(c(Dros="raw/Dros.fastq.gz"), FUN=function(x){
+  Rfastp::rfastp(x, thread=6, overrepresentationAnalysis=TRUE,
+                 outputFastq=file.path("trimmed/",gsub("\\.fastq\\.gz$","",basename(x))))
+})
+
+#Rfastp::curvePlot(qc$Dros, curve="content_curves")
+```
+```{r get genome sequence for alignment (q2, TwoBitFile) + for peak calling (q1, EnsDb)}
+ah <- AnnotationHub()
+q <- query(ah, c(species = "Drosophila Melanogaster",dataprovider = "Ensembl", rdataclass = "EnsDb", genome = "BDGP6.32"))
+q
+q2 <- query(ah, c(species = "Drosophila Melanogaster",dataprovider = "Ensembl", rdataclass = "TwoBitFile", genome = "BDGP6.32"))
+q2
+
+genome2bit <- ah[["AH106160"]]
+genome <- ah[["AH109569"]]
+
+
+```
+
+
+
+
+
+```{r alignment fastq}
+
+dir.create("BDGP6_genome")
+
+export(import.2bit(genome2bit), "BDGP6_genome/genome.fasta.gz", compress=TRUE)
+
+Rsubread::buildindex("BDGP6_genome/rsubread", reference="BDGP6_genome/genome.fasta.gz")
+
+
+
+
+
+dir.create("aligned")
+align.stats <- Rsubread::align(index="BDGP6_genome/rsubread", type="dna",
+                               readfile1=c("trimmed/Dros_R1.fastq.gz"),
+                               output_file=c("aligned/Dros.bam"),
+                               nthreads=6, sortReadsByCoordinates=TRUE)
+
+
+
+
+```
+
+```{r peak calling fastq}
+peaks <- callPeaks("aligned/Dros.bam", fragLength=50L)
+head(peaks)
+
+drosgenes <- genes(genome)
+head(drosgenes)
+drosgenes[drosgenes$gene_name == "Abd-B"]
+goi <- "3R:16927212-16972236"
+gr=GRanges(seqnames="3R",
+          ranges=IRanges(start = 16927212, end = 16972236),
+          strand="-")
+
+peakswithingoi <- subsetByOverlaps(peaks, gr)
+peakwithingoi <- peakswithingoi[score(peakswithingoi) == max(score(peakswithingoi))]
+peakwithingoi
+MyPeak <- "3R:16969662-16969809"
+
+
+```
+```{r report}
+"Total Reads"
+align.stats$Dros.bam[1]
+"Percentage of Reads Mapped"
+(align.stats$Dros.bam[2]/align.stats$Dros.bam[1]) * 100
+"Total Peaks"
+length(peaks)
+"Total Significant Peaks"
+length(peaks[peaks$log10FDR > 1.30])
+"Signal around a peak within my gene of interest"
+plotSignalTracks(c(Dros="aligned/Dros.bam"), region= MyPeak,
+                 extend=1000, tracks.params=list(ylim=c(0,500)))
+
+```
+
+
+
+
+
+
