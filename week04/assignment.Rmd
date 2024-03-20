@@ -1,0 +1,46 @@
+---
+title: "assignment"
+author: "Gavin Graf"
+date: "2024-03-15"
+output: html_document
+---
+```{r packages}
+suppressPackageStartupMessages({
+  library(AnnotationHub)
+  library(rtracklayer)
+  library(epiwraps)
+  library(GenomicRanges)
+})
+```
+
+```{r import encode peaks}
+path <- "C:/Users/gavin/Desktop/Epigenetic Bioinformatics/week4/peaks/"
+
+p300 <- rtracklayer::import(paste(path, "ENCFF653YVR.bed", sep = "/"), format = "narrowPeak")
+
+H3k4me3 <- rtracklayer::import(paste(path, "ENCFF422YVG.bed", sep = "/"), format = "narrowPeak")
+
+H3k4me1 <- rtracklayer::import(paste(path, "ENCFF718KBQ.bed", sep = "/"), format = "narrowPeak")
+
+H3k27me3 <- rtracklayer::import(paste(path, "ENCFF625UPA.bed", sep = "/"), format = "narrowPeak")
+
+H3k27ac <- rtracklayer::import(paste(path, "ENCFF276VUE.bed", sep = "/"), format = "narrowPeak")
+
+
+```
+
+```{r proportion p300 overlap}
+H3k4me3overlap <- findOverlaps(p300, H3k4me3)
+length(H3k4me3overlap[,1])/length(H3k4me3) * 100
+
+H3k4me1overlap <- findOverlaps(p300, H3k4me1)
+length(H3k4me1overlap[,1])/length(H3k4me1) * 100
+
+H3k27me3overlap <- findOverlaps(p300, H3k27me3)
+length(H3k27me3overlap[,1])/length(H3k27me3) * 100
+
+H3k27acoverlap <- findOverlaps(p300, H3k27ac)
+length(H3k27acoverlap[,1])/length(H3k27ac) * 100
+```
+
+
