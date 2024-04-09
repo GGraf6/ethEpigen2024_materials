@@ -1,0 +1,63 @@
+---
+title: "assignment"
+author: "Gavin Graf"
+date: "2024-03-22"
+output: html_document
+---
+
+```{r packages}
+suppressPackageStartupMessages({
+  library(AnnotationHub)
+  library(ensembldb)
+  library(GenomicRanges)
+  library(epiwraps)
+  library(rtracklayer)
+  library(ggplot2)
+})
+```
+
+```{r mESCs}
+
+path <- "C:/Users/gavin/Desktop/Epigenetic Bioinformatics/week4/peaks/"
+
+p300 <- rtracklayer::import(paste(path, "ENCFF653YVR.bed", sep = "/"), format = "narrowPeak")
+
+H3k4me3 <- rtracklayer::import(paste(path, "ENCFF422YVG.bed", sep = "/"), format = "narrowPeak")
+
+H3k4me1 <- rtracklayer::import(paste(path, "ENCFF718KBQ.bed", sep = "/"), format = "narrowPeak")
+
+H3k27me3 <- rtracklayer::import(paste(path, "ENCFF625UPA.bed", sep = "/"), format = "narrowPeak")
+
+H3k27ac <- rtracklayer::import(paste(path, "ENCFF276VUE.bed", sep = "/"), format = "narrowPeak")
+
+```
+
+```{r mESC bivalency}
+mESCoverlaps <- subsetByOverlaps(H3k4me3, H3k27me3)
+
+length(mESCoverlaps)
+```
+
+```{r megakaryocytes}
+path <- "C:/Users/gavin/Desktop/Epigenetic Bioinformatics/week5/peaks/"
+
+H3k4me3Diff <- rtracklayer::import(paste(path, "ENCFF407GYU.bed", sep = "/"), format = "narrowPeak")
+
+
+H3k27me3Diff <- rtracklayer::import(paste(path, "ENCFF020FKO.bed", sep = "/"), format = "narrowPeak")
+
+```
+
+```{r megakaryocyte bivalency}
+karyocyteOverlaps <- subsetByOverlaps(H3k4me3Diff, H3k27me3Diff)
+
+length(karyocyteOverlaps)
+```
+
+
+```{r Analysis of Overlaps in Megakaryocytes vs mESCs}
+length(subsetByOverlaps(mESCoverlaps, karyocyteOverlaps))
+length(findOverlaps(mESCoverlaps, H3k4me3Diff))
+length(findOverlaps(mESCoverlaps, H3k27me3Diff))
+```
+
