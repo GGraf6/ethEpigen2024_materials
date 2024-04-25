@@ -1,0 +1,96 @@
+---
+title: "assignment"
+author: "Gavin Graf"
+date: "2024-04-23"
+output: html_document
+---
+
+I had issues using the forceseqlevelstyle of Ensembl, so I manually made the seqlevels compatible. This made it possible to use the signal2matrix function, but I was unable to solve the errors from the functions getnormfactors and plotenrichedheatmaps. From what I understand the objects in the tracks need to be granges objects, which they are. The plotenrichedheatmaps error is due to the size of the termporary image for rasterization which I tried to limit, but unsuccessfully.
+
+```{r packages}
+suppressPackageStartupMessages({
+  library(epiwraps)
+  library(AnnotationHub)
+  library(MotifDb)
+  library(memes)
+  library(universalmotif)
+  library(ensembldb)
+  library(ggplot2)
+  library(rtracklayer)
+})
+```
+
+```{r bigwig files}
+
+download.file("https://ethz-ins.org/content/w7/atac.chr19.bam", "atac.chr19.bam", mode = "wb")
+download.file("https://ethz-ins.org/content/w7/atac.chr19.bam.bai", "atac.chr19.bam.bai", mode = "wb")
+
+bam <- "atac.chr19.bam"
+
+
+bam2bw(bam, output_bw = "NF_cuts.bw", paired=TRUE, binWidth=1L, type="ends", extend=2L, minFragLength=30, 
+       maxFragLength=120, shift=c(4L,-5L), forceSeqlevelsStyle = "UCSC")
+
+bam2bw(bam, output_bw = "N_centers.bw", paired=TRUE, binWidth=5L, minFragLength=140, shift=c(4L,-5L), 
+       maxFragLength=220, type="center", extend=10L, forceSeqlevelsStyle = "UCSC")
+
+bwNF <- "NF_cuts.bw"
+
+bwNC <- "N_centers.bw"
+
+bwNFgr <- import(bwNF)
+bwNCgr <- import(bwNC)
+chr <- "chr19" 
+bwNFgr19 <- subset(bwNFgr, seqnames(bwNFgr) == chr)
+bwNCgr19 <- subset(bwNCgr, seqnames(bwNCgr) == chr)
+seqlevels(bwNFgr19) <- chr
+seqlevels(bwNCgr19) <- chr
+seqlevels(bwNFgr19) <- sub("^chr", "", seqlevels(bwNFgr19))
+seqlevels(bwNCgr19) <- sub("^chr", "", seqlevels(bwNCgr19))
+```
+
+```{r motif}
+KLF4 <- MotifDb::query(MotifDb, c("KLF4","Mus"))[[1]]
+MAZ <- MotifDb::query(MotifDb, c("MAZ","Mus"))[[1]]
+
+KLF4c <- convert_motifs(KLF4, class="TFBSTools-PFMatrix")
+MAZc <- convert_motifs(MAZ, class="TFBSTools-PFMatrix")
+
+ah <- AnnotationHub()
+genome <- ah[["AH68356"]]
+chr19 <- import(genome)["19"]
+
+
+
+KLF4moi <- motifmatchr::matchMotifs(KLF4c, chr19, out="positions", p.cutoff=1e-5)[[1]]
+MAZmoi <- motifmatchr::matchMotifs(MAZc, chr19, out="positions", p.cutoff=1e-5)[[1]]
+
+KLF4moi2 <- as(setNames(KLF4moi,names(chr19)), "GRanges")
+MAZmoi2 <- as(setNames(MAZmoi,names(chr19)), "GRanges")
+
+
+```
+
+```{r plot}
+
+tracks <- c("NF Cuts"= bwNFgr19, "Nucleosome Centers"= bwNCgr19)
+
+smKLF4 <- signal2Matrix(tracks, KLF4moi2, w=3, extend=300)
+smMAZ <- signal2Matrix(tracks, MAZmoi2, w=3, extend=300)
+
+
+nf <- getNormFactors(tracks, useSeqLevels = "19", nwind=5000L)
+
+smKLF4 <- renormalizeSignalMatrices(sm, scaleFactors = nf)
+smMAZ <- renormalizeSignalMatrices(MAZ, scaleFactors = nf)
+
+
+ht_opt(raster_temp_image_max_width = 200, raster_temp_image_max_height = 2000)¨
+
+plotEnrichedHeatmaps(smKLF4, trim=0.95)
+plotEnrichedHeatmaps(smMAZ, trim=0.95)
+
+
+
+
+```
