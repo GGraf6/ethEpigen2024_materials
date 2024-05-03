@@ -1,0 +1,95 @@
+---
+title: "assignment2"
+author: "Gavin Graf"
+date: "2024-05-02"
+output: html_document
+---
+As you can see I had issues with getting a genome that is compatible with the functions below like motifmatchr and addGCBias. I tried different approaches of obtaining a genome which you can see below.
+
+```{r}
+suppressPackageStartupMessages({
+  library(AnnotationHub)
+  library(epiwraps)
+  library(motifmatchr)
+  library(MotifDb)
+  library(universalmotif)
+  library(ggplot2)
+  library(SummarizedExperiment) # data structure
+  library(sechm) # for plotting heatmaps from a SummrizedExperiment
+  library(BiocParallel) # for multithreading
+  library(chromVAR) # for motif accessibility estimation
+  library(limma) # for statistical analysis
+  library(BSgenome)
+  library(Rsamtools)
+})
+```
+
+
+```{r genome download}
+download.file("ftp://ftp.ensembl.org/pub/release-102/fasta/mus_musculus//dna/Mus_musculus.GRCm38.dna.primary_assembly.fa.gz", "GRCm38.fa", mode = "wb")
+genome <- Rsamtools::FaFile("GRCm38.fa")
+bgzip("GRCm38.fa")
+genomebgz <- Rsamtools::FaFile("GRCm38.fa.bgz")
+fasta <- readDNAStringSet("GRCm38.fa")
+```
+
+
+```{r genome AH}
+ah <- AnnotationHub()
+genomeAH <- ah[["AH88477"]]
+genomeseqAH <- import(genomeAH)
+Biostrings::writeXStringSet(genomeseqAH, "genomeAH.fa")
+genomeseqAHfa <- Rsamtools::FaFile("genomeAH.fa")
+genomeseqAHfa <- indexFa(genomeseqAHfa)
+```
+
+
+
+
+```{r ATAC seq peaks}
+download.file("https://ethz-ins.org/content/mouse_mm38_hippocampus.peakCounts.SE.rds", "ATACpeaks.rds", mode = "wb")
+ATACpeaks <- readRDS("ATACpeaks.rds")
+```
+
+
+```{r motifs}
+motifs <- query(MotifDb, c("HOCOMOCOv10","Mus"))
+
+motifs <- do.call(TFBSTools::PWMatrixList, setNames(
+           universalmotif::convert_motifs(motifs, class="TFBSTools-PWMatrix"),
+           mcols(motifs)$geneSymbol))
+
+moi <- motifmatchr::matchMotifs(motifs, subject=ATACpeaks, genome=genomeseqAHfa, out="positions")
+moi <- motifmatchr::matchMotifs(motifs, subject=ATACpeaks, genome="mm10", out="positions")
+
+```
+
+
+```{r}
+ATACpeaks
+colnames(ATACpeaks)
+colData(ATACpeaks)$condition <- c("CTRL", "CTRL","CTRL","CTRL","CTRL","CTRL","FSS","FSS","FSS","FSS","FSS","FSS")
+colData(ATACpeaks)$sex <- c("F","F","F","M","M","M","F","F","F","M","M","M")
+ATACpeaks <- chromVAR::addGCBias(ATACpeaks, genome=genomeseqAHfa)
+ATACpeaks <- chromVAR::addGCBias(ATACpeaks, genome="mm10")
+bg <- chromVAR::getBackgroundPeaks(ATACpeaks, niterations=1000)
+dev <- chromVAR::computeDeviations(object = ATACpeaks, annotations=moi,
+                                   background_peaks=bg)
+mmC <- model.matrix(~dev$condition)
+mmS <- model.matrix(~dev$sex)
+
+fitC <- limma::eBayes(limma::lmFit(object = assays(dev)$z, design = mmC))
+fitS <- limma::eBayes(limma::lmFit(object = assays(dev)$z, design = mmS))
+
+resC <- as.data.frame(limma::topTable(fitC, coef="condition", number = Inf))
+resS <- as.data.frame(limma::topTable(fitS, coef="sex", number = Inf))
+
+
+ggplot(resC, aes(logFC, -log10(adj.P.Val), label=TF)) + geom_text()
+ggplot(resS, aes(logFC, -log10(adj.P.Val), label=TF)) + geom_text()
+
+
+```
+
+
+
