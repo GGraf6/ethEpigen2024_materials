@@ -1,0 +1,79 @@
+---
+title: "assignment"
+author: "Gavin Graf"
+date: "2024-05-14"
+output: html_document
+---
+
+```{r packages}
+suppressPackageStartupMessages({
+  library(GenomicRanges)
+  library(epiwraps)
+  library(ggplot2)
+  library(rGREAT) 
+})
+```
+
+```{r get data}
+
+options(timeout = 6000)
+download.file("https://ethz-ins.org/content/w10.assignment.zip", "w10.practical.zip")
+unzip("w10.assignment.zip")
+tracks <- list.files(pattern="bw$")
+peaks <- list.files(pattern="bed$")
+peaks <- lapply(peaks, rtracklayer::import.bed)
+peaks <- lapply(peaks, FUN=function(x) x[x$score>800])
+regions <- reduce(unlist(GRangesList(peaks)))
+
+
+
+```
+
+
+
+```{r}
+ese <- signal2Matrix(tracks, regions, extend=2000)
+```
+
+```{r clustering}
+set.seed(123)
+cl <- clusterSignalMatrices(ese, k=4, scaleRows = TRUE)
+rowData(ese)$cluster <- cl
+mycolors <- c("1"="red", "2"="blue", "3"="darkgreen", "4"="black")
+
+```
+
+
+
+```{r GO enrichment}
+split_regions <- split(rowRanges(ese), rowData(ese)$cluster)
+lengths(split_regions)
+
+res <- great(split_regions[["3"]], gene_sets="GO:BP", tss_source="hg38", 
+             background=regions, cores=2)
+bp <- getEnrichmentTables(res)
+
+
+```
+
+I was unable to get the column titles to match the corresponding data, but the heatmaps should represent the Crebs in the order of the tracks (Creb1, Creb3, Creb3L1). The argument column_title in plot enriched heatmaps only accepts 1 string for me. When I try column_title = tracks, I get an error saying that the column_title should be the same length as the number of column slices.
+
+```{r plots}
+tracks
+plotEnrichedHeatmaps(ese, row_split=rowData(ese)$cluster, mean_color=mycolors, colors=c("white","darkred"))
+
+ggplot(head(bp,15), aes(fold_enrichment, reorder(description, p_adjust), 
+                        size=observed_region_hits, color=-log10(p_adjust))) + 
+  geom_point() + scale_color_viridis_c()
+```
+
+Creb1: 
+- induces transcription in response to hormonal stimulation (stress?)
+- recruits a histone acetyl transferase (CBP)
+Creb3:
+- recruits a histone deacetylase (HDAC3)
+Creb3L1:
+- targets genes known to be upregulated during stress
+
+
+In cluster 3, we see a significant increase in signal of Creb3 relative to Creb1 and Creb3L1. Since Creb3 is known to bind to HDAC3 and Creb1 recruits CBP, a histone acetyl transferase, it seems to make sense that their signals do not overlap. For this reason, the binding sites of Creb1 and Creb3 along the genome could simply correlate with the precense or absence of acetylation respectively. It has been shown that Creb1 induces transcription in response to hormonal stimulation and Creb3L1 targets genes known to be upregulated during stress, therefore we could interpret that there is interplay between Creb1 and Creb3L1, which can be seen in the enrichment heat maps since their signals tend to overlap. Generally, Creb3 seems to be antagonistic towards the other TFs except for in cluster 2, which could be a cluster that simply captures the transition state between acetylated and deacetylated sites. When looking at the GO enrichment analysis, we see that there is a significant enrichment in cellular signaling and even some inflammatory related processes. This could very well represent the cellular post stress response, where Creb3 recruits HDAC3, allowing Creb1 and therefore Creb3L1 to dissociate, preventing Creb3L1 from targeting its stress related genes.
