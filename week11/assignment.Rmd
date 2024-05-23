@@ -1,0 +1,90 @@
+---
+title: "assignment"
+author: "Gavin Graf"
+date: "2024-05-22"
+output: html_document
+---
+I wasn't able to knit the rmd, due to the hg38 genome being "not valid". But I don't get errors in the rmd, so I also uploaded images of the two plots on github.
+```{r packages}
+suppressPackageStartupMessages({
+  library(GenomicRanges)
+  library(epiwraps)
+  library(ggplot2)
+  library(rGREAT)
+  library(AnnotationHub)
+  library(ensembldb)
+  library(bsseq)
+  library(BiocParallel)
+  library(edgeR)
+  library(DMRcate)
+  library(rtracklayer)
+  library(sechm)
+  library(pheatmap)
+  library(viridis)
+  library(data.table)
+  library(viridis)
+  library(pheatmap)
+})
+
+```
+
+
+```{r load data}
+tracks <- list("dmrRanges"="./dmrRanges.rds")
+tracks <- lapply(tracks, readRDS)
+tracks$dmrRanges
+o <- order(tracks$dmrRanges$Fisher)
+fishersorted <- tracks$dmrRanges[o]
+fishersortedtop5 <- fishersorted[1:5,]
+
+```
+
+```{r bsseq}
+bs <- readRDS("./w11_practical/bs.rds")
+```
+
+
+```{r}
+metPr <- getMeth(bs, regions=fishersortedtop5, what="perRegion")
+colnames(metPr) <- colnames(bs)
+rownames(metPr) <- fishersortedtop5$overlapping.genes[1:5]
+metPr <- metPr[!is.na(rowSums(metPr)),]
+annotationCol <- as.data.frame(pData(bs)[,c("Type","Pair")])
+rownames(annotationCol) <- colnames(metPr)
+pheatmap::pheatmap(metPr, 
+                   cluster_rows=TRUE,
+                   cluster_cols=FALSE,
+                   annotation_col=annotationCol,
+                   show_rownames = TRUE,
+                   color=rocket(10))
+```
+
+
+
+```{r get promotersChr22}
+ah <- AnnotationHub()
+ensdb <- ah[["AH109336"]]
+
+chr22 <-  GRanges(seqnames=Rle(c("22")), 
+                  ranges = IRanges(1, end=195471971))
+genesChr22 <- genes(ensdb, columns=c("gene_seq_start", "gene_seq_end", "gene_name"),
+                    filter=GRangesFilter(chr22))
+seqlevelsStyle(genesChr22) <- "UCSC"
+
+tssMargin <- 200
+promotersChr22 <- promoters(ensdb, upstream=tssMargin, downstream=tssMargin,
+                             filter=GRangesFilter(chr22), columns=c("gene_name"))
+seqlevelsStyle(promotersChr22) <- "UCSC"
+```
+
+```{r}
+
+tracks2 <- list("dmr"="./dmr.rds")
+tracks2 <- lapply(tracks2, readRDS)
+tracks2$dmr
+DMR.plot(tracks2$dmr, dmr=1,phen.col=c(rep("red", 3), rep("green",3)), CpGs=bs, genome="hg38")
+
+```
+This plot shows differentially methylated regions mapped to the 22nd chromosome also displaying which CpGs and genes the DMRs are found in. The smoothed methylation shows the prevelance of methylation with reduced noise by using local averaging. The different colors represent the methylation in our two conditions: colon cancer (red) and healthy colon (green). 
+The results show that the colon cancer sample has overall less methylation across chromosome 22 including genes such as XBP1 and CCDC117, indicating that these genes could play a role in colon cancer formation. Further down the chromosome, at around 28.84 mb, we see less methylation, but since both sample conditions show about the same amount of methylation, we could interpret this region as an unaffected region in colon cancer. 
+
